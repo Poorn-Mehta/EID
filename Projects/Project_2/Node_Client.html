@@ -40,6 +40,7 @@
         var table_format_2 = "td, th { border: 1px solid #dddddd; text-align: center; padding: 1px;} </style>";
 		var message_0 = "<br/><b>Database Readings in a Table Below</b>";
         var message_1 = "<table><tr><th><b>Index</b></th><th><b>Humidity</b></th></tr>";
+		var timings_message = "";
 		var tmp_str1, tmp_str2;
  
           // create websocket instance
@@ -76,10 +77,12 @@
 				
 				else{
 					if(Node_NT_Count == 0){
-						Table_Str = Tbl_Str_1 + table_format_1 + table_format_2 + message_0 + message_1;
-						//Node_NT_Count = Node_NT_Count + 1;
+						obj = JSON.parse(evt.data);
+						timings_message = "<br/>Start Time: <b>" + obj.begin + "</b><br/>End Time: <b>" + obj.end + "</b><br/>Elapsed Time(in milliseconds): <b>" + obj.temp + "ms</b>"
+						Table_Str = Tbl_Str_1 + timings_message + table_format_1 + table_format_2 + message_0 + message_1;
+						Node_NT_Count = Node_NT_Count + 1;
 					}
-					if(Node_NT_Count < 9){
+					else if(Node_NT_Count < 10){
 						obj = JSON.parse(evt.data);
 						tmp_str1 = "<tr><td>" + Node_NT_Count.toString() + "</td><td>";
 						tmp_str2 = obj.Humidity + "%</td></tr>";
