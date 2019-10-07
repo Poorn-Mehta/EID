@@ -14,7 +14,22 @@
  
 /*
 
-References Below:
+Authors: Poorn Mehta and Rushi Macwan
+
+HTML File for EID Project 2
+
+Connects to both - Node.js Server and Tornado Server, which is running on local network - on the same machine (ip address can be modified)
+
+Implements multiple buttons to provide required functionalities.
+
+Instant Data - Tornado Button: Connects to Python script on RPi through Tornado, polls the DHT22 Sensor, gets back the data
+Single DB - Node Button: Connect to MySQL database on RPi through Node.js Server, gets the latest stored values
+Deg. C (or Deg. F) Button: Simply changes the temperature units between Celsius and Fahrenheit
+Network Test Button: Tests the speed of two different routes, by acquiring same set of data and printing elapsed time, along with the data
+
+Contains HTML as well as jQuery and JavaScript coding
+
+Code was developed with help of following References:
 
 https://www.w3schools.com/jquery/
 https://www.w3schools.com/js/default.asp
@@ -53,11 +68,17 @@ https://api.jquery.com/jquery.parsejson/
 			// Status indicator for tornado websocket connection
 			var Tornado_Connected = 0;
 			
+			// To check whether any Immediate Tornado requests have taken place or not
+			var Tornado_Req = 0;
+			
 			// Node webserver handler
 			var WS_Node;
 			
 			// Status indicator for node websocket connection
 			var Node_Connected = 0;
+			
+			// To check whether any Last DB Node requests have taken place or not
+			var Node_Req = 0;
 			
 			// JSON Object that is received from Node server
 			var Node_JSON_Obj;
@@ -76,6 +97,9 @@ https://api.jquery.com/jquery.parsejson/
 			
 			// Humidity string using Node's data - used for overall formatting of HTML
 			var Node_Humi_str = "0.0";
+			
+			// Timestamp string using Node's data - used for overall formatting of HTML
+			var Node_Timestamp_str = "";
 			
 			// Final string using various Node strings - contains all of the required formatting.
 			var Node_Final_Str = "";
@@ -137,7 +161,7 @@ https://api.jquery.com/jquery.parsejson/
 			{
 				// Regular messages and Network Testing Messages are handled Differently
 				if(NT_TST == 0)
-				{
+				{			
 					// Print the html formatted string appropriately in the correct element
 					$("#Tornado_Immediate").html(evt.data);
 				}
@@ -192,6 +216,9 @@ https://api.jquery.com/jquery.parsejson/
 					// Preparing humidity string
 					Node_Humi_str = "<br/>Humidity: <b>" + Node_JSON_Obj.Humidity + "%</b>";
 					
+					// Preparing timestamp string
+					Node_Timestamp_str = "<br/>Stored On: <b>" + Node_JSON_Obj.Time_Stamp + "%</b>";
+					
 					// Testing for current temperature unit settings
 					if(Unit_C_F == 1)
 					{
@@ -214,7 +241,7 @@ https://api.jquery.com/jquery.parsejson/
 					}
 
 					// Preparing final string to be printed
-					Node_Final_Str = Node_DB_Str_1 + Node_Temp_str + Node_Humi_str;
+					Node_Final_Str = Node_DB_Str_1 + Node_Temp_str + Node_Humi_str + Node_Timestamp_str;
 
 					// Print this HTML in appropriate element of the webpage
 					$("#Node_Last_DB").html(Node_Final_Str);
@@ -231,7 +258,7 @@ https://api.jquery.com/jquery.parsejson/
 						
 						// Using the local object to extract timing information, and format in a valid HTML string
 						Node_Timings_Message = "<br/>Start Time: <b>" + Node_JSON_Obj.begin + "</b><br/>End Time: <b>"
-						Node_Timings_Message += Node_JSON_Obj.end + "</b><br/>Elapsed Time(in milliseconds): <b>" + Node_JSON_Obj.exec + "ms</b>"
+						Node_Timings_Message += Node_JSON_Obj.end + "</b><br/>Elapsed Time(in microseconds): <b>" + Node_JSON_Obj.exec + "us</b>"
 						
 						// Preparing the first portion of the HTML string that will create the table for Node data
 						Node_Table_Str = Node_Table_Header_String + Node_Timings_Message + Node_Table_Style_1 + Node_Table_Style_2 + Node_Table_Info_String + Node_Table_Column_Lables;
@@ -269,7 +296,6 @@ https://api.jquery.com/jquery.parsejson/
 						$("#Net_Test_Node").html(Node_Table_Str);
 						
 						// Resetting variables
-						NT_TST = 0;
 						Node_NT_Count = 0;
 						Node_Table_Str = "";
 					}
@@ -281,6 +307,9 @@ https://api.jquery.com/jquery.parsejson/
 			{
 				// Reset Net_Test flag
 				NT_TST = 0;
+				
+				// Set Tornado Req
+				Tornado_Req = 1;
 				
 				// Considering error condition
 				if(Tornado_Connected == 1)
@@ -300,6 +329,9 @@ https://api.jquery.com/jquery.parsejson/
 			{
 				// Reset Net_Test flag
 				NT_TST = 0;
+				
+				// Set Node Req
+				Node_Req = 1;
 				
 				// Considering error condition
 				if(Node_Connected == 1)
@@ -323,8 +355,23 @@ https://api.jquery.com/jquery.parsejson/
 				// Considering error condition
 				if(Tornado_Connected == 1)
 				{
-					// Special string that is known to the Server
-					WS_Tornado.send("FLIP_UNIT");
+					// To obtain force sync between temperatures retrieved from Node and Tornado
+					if(Tornado_Req == 1)
+					{
+						// If the unit was changed to F before Tornado was requested for the first time, then do not flip - just wait and get in sync
+						if(Unit_C_F == 0)
+						{
+							// Special string that is known to the Server
+							WS_Tornado.send("FLIP_UNIT");
+						}
+						// To come out of the first request mode
+						Tornado_Req = 2;
+					}
+					else if(Tornado_Req == 2)
+					{
+						// Since the sync is achieved, always send the request
+						WS_Tornado.send("FLIP_UNIT");
+					}
 				}
 				else
 				{
@@ -332,38 +379,60 @@ https://api.jquery.com/jquery.parsejson/
 					$("#Tornado_Immediate").html("<b>FLIP_UNIT Failed<br/>Error: NOT Connected to the Server<br/>Try Reloading Page to attempt again</b>");
 				}
 				
-				// Local Unit change for the node data
-				if(Unit_C_F == 0)
+				// Only print if there is an old display on screen
+				if(Node_Req == 1)
 				{
-					Unit_C_F = 1;
-					
-					// Convert to Fahrenheit
-					Node_Local_Temp = (Node_Temp_flt * 1.8) + 32;
-					Node_Temp_val_str = Node_Local_Temp.toString();
-					Node_Temp_str = "<br/>Temperature: <b>" + Node_Temp_val_str + "*F</b>";
+					// Local Unit change for the node data
+					if(Unit_C_F == 0)
+					{
+						// Go to F
+						Unit_C_F = 1;
+						
+						// Chagne button text accordingly
+						$("#Change_Unit").html("Deg. F");
+						
+						// Convert to Fahrenheit
+						Node_Local_Temp = (Node_Store_Temp * 1.8) + 32;
+						Node_Temp_val_str = Node_Local_Temp.toFixed(1);
+						Node_Temp_str = "<br/>Temperature: <b>" + Node_Temp_val_str + "*F</b>";
+					}
+					else
+					{
+						// Go to C
+						Unit_C_F = 0;
+						
+						// Chagne button text accordingly
+						$("#Change_Unit").html("Deg. C");
+						
+						// Go back to stored Celsius
+						Node_Local_Temp = Node_Store_Temp;
+						Node_Temp_val_str = Node_Local_Temp.toString();
+						Node_Temp_str = "<br/>Temperature: <b>" + Node_Temp_val_str + "*C</b>";
+					}
+
+					// Preparing final string
+					Node_Final_Str = Node_DB_Str_1 + Node_Temp_str + Node_Humi_str + Node_Timestamp_str;
+
+					// Update the text
+					$("#Node_Last_DB").html(Node_Final_Str);
 				}
+				
+				// Keep track of current setting
 				else
 				{
-					Unit_C_F = 0;
-					
-					// Go back to stored Celsius
-					Node_Local_Temp = Node_Store_Temp;
-					Node_Temp_val_str = Node_Local_Temp.toString();
-					Node_Temp_str = "<br/>Temperature: <b>" + Node_Temp_val_str + "*C</b>";
+					// Even if Node request isn't sent for the first time as well, keep track of the state of Unit Change requests and last state
+					if(Unit_C_F == 0)
+					{
+						Unit_C_F = 1;
+						$("#Change_Unit").html("Deg. F");
+					}
+					else
+					{
+						Unit_C_F = 0;
+						$("#Change_Unit").html("Deg. C");
+					}
 				}
-
-				// Preparing final string
-				Node_Final_Str = Node_DB_Str_1 + Node_Temp_str + Node_Humi_str;
-
-				// Update the text
-				$("#Node_Last_DB").html(Node_Final_Str);
 			});
-			
-        $("#Change_Unit").click(function(evt) {
-            //log("Sending Message: FLIP_UNIT");
-			NT_TST = 0;
-
-        });
 		
 			// Send request to the remote server using websocket message
 			$("#Net_Test").click(function(evt)
@@ -405,7 +474,7 @@ https://api.jquery.com/jquery.parsejson/
         </br></br>
 		<button type="button" id="Get_Single_Tornado">Instant Data - Tornado</button>
 		<button type="button" id="Get_Last_DB">Single DB - Node</button>
-        <br/><br/><button type="button" id="Change_Unit">Flip Unit (C/F)</button>
+        <br/><br/><button type="button" id="Change_Unit">Deg. C</button>
 		<button type="button" id="Net_Test">Network Test</button>
     </div>
 	<p id="Tornado_Immediate"></p>
