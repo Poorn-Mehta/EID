@@ -1,11 +1,11 @@
 <!doctype html>
 <html>
   <head>
-    <title>WebSockets Hello World</title>
+    <title>EID Project 2</title>
     <meta charset="utf-8" />
     <style type="text/css">
       body {
-        text-align: center;
+        text-align: left;
         min-width: 500px;
       }
     </style>
@@ -22,6 +22,7 @@
 //        $("div#message_details").hide()
  
         var ws;
+		var NT_TST = 0;
  
 //        $("#open").click(function(evt) {
 //          evt.preventDefault();
@@ -38,17 +39,21 @@
           ws.onmessage = function(evt) {
             //log("Message Received: " + evt.data)
             //alert("message received: " + evt.data);
-			$("#Tornado_Immediate").html(evt.data);
+				if(NT_TST == 0){
+					$("#Tornado_Immediate").html(evt.data);
+				} else{
+					$("#Net_Test_Tornado").html(evt.data);
+				}
             };
  
           // Close Websocket callback
           ws.onclose = function(evt) {
             log("***Connection Closed***");
             alert("Connection close");
-            $("#host").css("background", "#ff0000"); 
-            $("#port").css("background", "#ff0000"); 
-            $("#uri").css("background",  "#ff0000");
-            $("div#message_details").empty();
+//            $("#host").css("background", "#ff0000"); 
+//            $("#port").css("background", "#ff0000"); 
+//            $("#uri").css("background",  "#ff0000");
+//            $("div#message_details").empty();
  
             };
  
@@ -57,7 +62,7 @@
 //            $("#host").css("background", "#00ff00"); 
 //            $("#port").css("background", "#00ff00"); 
 //            $("#uri").css("background", "#00ff00");
-//            $("div#message_details").show();
+            $("div#message_details").show();
             log("***Connection Opened***");
           };
 //        });
@@ -81,12 +86,20 @@
         // Send websocket message function
         $("#Get_Single_Tornado").click(function(evt) {
             //log("Sending Message: DHT22_DATA_TSTAMP");
+			NT_TST = 0;
 			ws.send("DHT22_DATA_TSTAMP");
         });
 		
         $("#Change_Unit").click(function(evt) {
             //log("Sending Message: FLIP_UNIT");
+			NT_TST = 0;
 			ws.send("FLIP_UNIT");
+        });
+		
+        $("#Net_Test").click(function(evt) {
+            //log("Sending Message: NET_TEST");
+			NT_TST = 1;
+			ws.send("NET_TEST");
         });
  
       });
@@ -94,14 +107,15 @@
   </head>
  
   <body>
-    <h1>WebSockets Hello World</h1>
+    <h1>EID Project 2</h1>
     <div id="message_details">
         </br></br>
 		<button type="button" id="Get_Single_Tornado">Instant Data - Tornado</button>
         <button type="button" id="Change_Unit">Flip Unit</button>
+		<button type="button" id="Net_Test">Network Test</button>
     </div>
-	<br/><b>Immediate Data from DHT22 via Tornado</b>
 	<p id="Tornado_Immediate"></p>
+	<p id="Net_Test_Tornado"></p>
     <div id="terminal">
         
     </div>
