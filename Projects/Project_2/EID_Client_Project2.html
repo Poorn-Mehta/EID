@@ -1,0 +1,417 @@
+<!doctype html>
+<html>
+  <head>
+    <title>EID Project 2</title>
+    <meta charset="utf-8" />
+    <style type="text/css">
+      body {
+        text-align: left;
+        min-width: 500px;
+      }
+    </style>
+    <script src="http://code.jquery.com/jquery.min.js"></script>
+    <script>
+ 
+/*
+
+References Below:
+
+https://www.w3schools.com/jquery/
+https://www.w3schools.com/js/default.asp
+https://os.mbed.com/cookbook/Websockets-Server
+https://www.pubnub.com/blog/nodejs-websocket-programmingexamples/
+https://www.w3schools.com/nodejs/nodejs_mysql.asp
+http://www.tornadoweb.org/en/stable/
+https://www.w3schools.com/js/js_json_parse.asp
+https://stackoverflow.com/questions/21634918/extract-a-float-from-a-string-in-javascript
+https://www.w3schools.com/jsref/jsref_tostring_number.asp
+https://api.jquery.com/jquery.parsejson/
+
+*/ 
+ 
+		// Start script only after the document has been loaded
+		$(document).ready(function () 
+		{
+ 
+			// Global variables and constants
+			
+			// Target IP Address
+			var Target_IP = "192.168.50.92";
+			
+			// Port used by Tornado websocket
+			var Tornado_Port = "8888";
+			
+			// Port used by Node websocket
+			var Node_Port = "9898";
+			
+			// Tornado webserver handler
+			var WS_Tornado;
+			
+			// Net_Test flag to expect spefic responses
+			var NT_TST = 0;
+			
+			// Status indicator for tornado websocket connection
+			var Tornado_Connected = 0;
+			
+			// Node webserver handler
+			var WS_Node;
+			
+			// Status indicator for node websocket connection
+			var Node_Connected = 0;
+			
+			// JSON Object that is received from Node server
+			var Node_JSON_Obj;
+			
+			// Current Temperature Unit, Celsius is 0 and Fahrenheit is 1
+			var Unit_C_F = 0; 
+			
+			// Temperature from Node - in float
+			var Node_Temp_flt = 0.0;
+			
+			// Temperature value from Node - in string
+			var Node_Temp_val_str = "0.0";
+			
+			// Temperature string using Node's data - used for overall formatting of HTML
+			var Node_Temp_str = "0.0";
+			
+			// Humidity string using Node's data - used for overall formatting of HTML
+			var Node_Humi_str = "0.0";
+			
+			// Final string using various Node strings - contains all of the required formatting.
+			var Node_Final_Str = "";
+			
+			// String to be used as is for HTML formatting. Contains information about the data being displayed.
+			var Node_DB_Str_1 = "<b>Most Recent Database Readings from Node Server</b>";
+			
+			// Node variables used to change local display unit of temperature
+			var Node_Local_Temp = 0.0;
+			var Node_Store_Temp = 0.0;
+			
+			// Node Net_Test received JSON objects count
+			var Node_NT_Count = 0;
+			
+			// Table string for Node Net Testing
+			var Node_Table_Str = "";
+			
+			// Table title/header string for the Node
+			var Node_Table_Header_String = "<br/><b>Network Test: Node Route</b>";
+			
+			// Table styling
+			var Node_Table_Style_1 = "<style>table {font-family: arial,sans-serif; order-collapse: collapse; width: 50%;} ";
+			var Node_Table_Style_2 = "td, th { border: 1px solid #dddddd; text-align: center; padding: 1px;} </style>";
+			
+			// A few more useful strings for Node table formatting and information
+			var Node_Table_Info_String = "<br/><b>Database Readings in a Table Below</b>";
+			var Node_Table_Column_Lables = "<table><tr><th><b>Index</b></th><th><b>Humidity</b></th></tr>";
+			var Node_Timings_Message = "";
+			var tmp_str1, tmp_str2;
+ 
+			// Try to connect to remote Tornado Server
+			WS_Tornado = new WebSocket("ws://" + Target_IP + ":" + Tornado_Port + "/ws");
+          
+			// Tornado Websocket Open Callback
+			WS_Tornado.onopen = function(evt) 
+			{
+				// Append this event in Logger element of the webpage
+				$("#Logger").append("<br/><b>Tornado Server Connection Opened</b>");
+				
+				// Raise the flag to indicate that the Tornado Server connection has been successfull
+				Tornado_Connected = 1;
+			};
+		  
+		    // Close Tornado Websocket callback
+			WS_Tornado.onclose = function(evt) 
+			{
+				// Append this event in Logger element of the webpage
+				$("#Logger").append("<br/><b>Tornado Server Connection Closed</b>");
+				
+				// Raise alert on the webpage since the connection has been closed
+				alert("Tornado Connection close");
+				
+				// Indicate to the rest of the code that the Tornado connection has been broken
+				Tornado_Connected = 0;
+			};
+		  
+			// Tornado Incoming Messages Callback
+			WS_Tornado.onmessage = function(evt) 
+			{
+				// Regular messages and Network Testing Messages are handled Differently
+				if(NT_TST == 0)
+				{
+					// Print the html formatted string appropriately in the correct element
+					$("#Tornado_Immediate").html(evt.data);
+				}
+				else
+				{
+					// Print the html formatted string appropriately in the correct element
+					$("#Net_Test_Tornado").html(evt.data);
+				}
+			};
+			
+			// Try to connect to remote Node Server
+			WS_Node = new WebSocket("ws://" + Target_IP + ":" + Node_Port + "/");
+			
+			// Node Websocket Open Callback
+			WS_Node.onopen = function(evt) 
+			{
+				// Append this event in Logger element of the webpage
+				$("#Logger").append("<br/><b>Node Server Connection Opened</b>");
+				
+				// Raise the flag to indicate that the Node Server connection has been successfull
+				Node_Connected = 1;
+			};
+			
+		    // Close Node Websocket callback
+			WS_Node.onclose = function(evt) 
+			{
+				// Append this event in Logger element of the webpage
+				$("#Logger").append("<br/><b>Node Server Connection Closed</b>");
+				
+				// Raise alert on the webpage since the connection has been closed
+				alert("Node Connection close");
+				
+				// Indicate to the rest of the code that the Node connection has been broken
+				Node_Connected = 0;
+			};
+			
+			// Node Incoming Messages Callback
+			WS_Node.onmessage = function(evt)
+			{
+				// Regular messages and Network Testing Messages are handled Differently
+				if(NT_TST == 0)
+				{
+					// Parse the JSON object from the received data
+					Node_JSON_Obj = JSON.parse(evt.data);
+					
+					// Converting data to float, in order to manipulate it and facilitate unit conversion
+					Node_Temp_flt = parseFloat(Node_JSON_Obj.Temperature);
+					
+					// Storing last temperature so that conversion runs flawlessly
+					Node_Store_Temp = Node_Temp_flt;
+					
+					// Preparing humidity string
+					Node_Humi_str = "<br/>Humidity: <b>" + Node_JSON_Obj.Humidity + "%</b>";
+					
+					// Testing for current temperature unit settings
+					if(Unit_C_F == 1)
+					{
+						// Converting original Celsius to Fahrenheit if needed
+						Node_Temp_flt = (Node_Temp_flt * 1.8) + 32;
+						
+						// Converting latest and updated float variable to string
+						Node_Temp_val_str = Node_Temp_flt.toString();
+						
+						// Formatting temperature HTML string
+						Node_Temp_str = "<br/>Temperature: <b>" + Node_Temp_val_str + "*F</b>";
+					}
+					else
+					{
+						// Converting latest and updated float variable to string
+						Node_Temp_val_str = Node_Temp_flt.toString();
+						
+						// Formatting temperature HTML string
+						Node_Temp_str = "<br/>Temperature: <b>" + Node_Temp_val_str + "*C</b>";
+					}
+
+					// Preparing final string to be printed
+					Node_Final_Str = Node_DB_Str_1 + Node_Temp_str + Node_Humi_str;
+
+					// Print this HTML in appropriate element of the webpage
+					$("#Node_Last_DB").html(Node_Final_Str);
+				}
+
+				// Net Test case - the server sends total 11 objects repetitively, first one containing time stamps, and the rest containing data
+				else
+				{
+					// Check if it's the very first package
+					if(Node_NT_Count == 0)
+					{
+						// Pasing JSON object and storing in a local object
+						Node_JSON_Obj = JSON.parse(evt.data);
+						
+						// Using the local object to extract timing information, and format in a valid HTML string
+						Node_Timings_Message = "<br/>Start Time: <b>" + Node_JSON_Obj.begin + "</b><br/>End Time: <b>"
+						Node_Timings_Message += Node_JSON_Obj.end + "</b><br/>Elapsed Time(in milliseconds): <b>" + Node_JSON_Obj.exec + "ms</b>"
+						
+						// Preparing the first portion of the HTML string that will create the table for Node data
+						Node_Table_Str = Node_Table_Header_String + Node_Timings_Message + Node_Table_Style_1 + Node_Table_Style_2 + Node_Table_Info_String + Node_Table_Column_Lables;
+						
+						// Increment packet counter by 1 so that next time the code goes in else if part
+						Node_NT_Count = Node_NT_Count + 1;
+					}
+					else if(Node_NT_Count < 10)
+					{
+						// Data packets, parsing JSON objects
+						Node_JSON_Obj = JSON.parse(evt.data);
+						
+						// Formatting and putting data in the table rows and columns
+						tmp_str1 = "<tr><td>" + Node_NT_Count.toString() + "</td><td>";
+						tmp_str2 = Node_JSON_Obj.Humidity + "%</td></tr>";
+						Node_Table_Str += tmp_str1 + tmp_str2;
+						
+						// Increment counter
+						Node_NT_Count = Node_NT_Count + 1;
+					}
+					else
+					{
+						// Last received object
+						Node_JSON_Obj = JSON.parse(evt.data);
+						
+						// Performing similar functionalities
+						tmp_str1 = "<tr><td>" + Node_NT_Count.toString() + "</td><td>";
+						tmp_str2 = Node_JSON_Obj.Humidity + "%</td></tr>";
+						Node_Table_Str += tmp_str1 + tmp_str2;
+						
+						// Closing table
+						Node_Table_Str += "</table>";
+						
+						// Outputting to designated element
+						$("#Net_Test_Node").html(Node_Table_Str);
+						
+						// Resetting variables
+						NT_TST = 0;
+						Node_NT_Count = 0;
+						Node_Table_Str = "";
+					}
+				}
+			};
+ 
+			// Send request to the remote server using websocket message
+			$("#Get_Single_Tornado").click(function(evt)
+			{
+				// Reset Net_Test flag
+				NT_TST = 0;
+				
+				// Considering error condition
+				if(Tornado_Connected == 1)
+				{
+					// Special string that is known to the Server
+					WS_Tornado.send("DHT22_DATA_TSTAMP");
+				}
+				else
+				{
+					// Generic error printing
+					$("#Tornado_Immediate").html("<b>DHT22_DATA_TSTAMP Failed<br/>Error: NOT Connected to the Server<br/>Try Reloading Page to attempt again</b>");
+				}
+			});
+			
+			// Send request to the remote server using websocket message
+			$("#Get_Last_DB").click(function(evt)
+			{
+				// Reset Net_Test flag
+				NT_TST = 0;
+				
+				// Considering error condition
+				if(Node_Connected == 1)
+				{
+					// Special string that is known to the Server
+					WS_Node.send("LAST_ENTRY");
+				}
+				else
+				{
+					// Generic error printing
+					$("#Node_Last_DB").html("<b>LAST_ENTRY Failed<br/>Error: NOT Connected to the Server<br/>Try Reloading Page to attempt again</b>");
+				}
+			});
+		
+			// Send request to the remote server using websocket message
+			$("#Change_Unit").click(function(evt)
+			{
+				// Reset Net_Test flag
+				NT_TST = 0;
+				
+				// Considering error condition
+				if(Tornado_Connected == 1)
+				{
+					// Special string that is known to the Server
+					WS_Tornado.send("FLIP_UNIT");
+				}
+				else
+				{
+					// Generic error printing
+					$("#Tornado_Immediate").html("<b>FLIP_UNIT Failed<br/>Error: NOT Connected to the Server<br/>Try Reloading Page to attempt again</b>");
+				}
+				
+				// Local Unit change for the node data
+				if(Unit_C_F == 0)
+				{
+					Unit_C_F = 1;
+					
+					// Convert to Fahrenheit
+					Node_Local_Temp = (Node_Temp_flt * 1.8) + 32;
+					Node_Temp_val_str = Node_Local_Temp.toString();
+					Node_Temp_str = "<br/>Temperature: <b>" + Node_Temp_val_str + "*F</b>";
+				}
+				else
+				{
+					Unit_C_F = 0;
+					
+					// Go back to stored Celsius
+					Node_Local_Temp = Node_Store_Temp;
+					Node_Temp_val_str = Node_Local_Temp.toString();
+					Node_Temp_str = "<br/>Temperature: <b>" + Node_Temp_val_str + "*C</b>";
+				}
+
+				// Preparing final string
+				Node_Final_Str = Node_DB_Str_1 + Node_Temp_str + Node_Humi_str;
+
+				// Update the text
+				$("#Node_Last_DB").html(Node_Final_Str);
+			});
+			
+        $("#Change_Unit").click(function(evt) {
+            //log("Sending Message: FLIP_UNIT");
+			NT_TST = 0;
+
+        });
+		
+			// Send request to the remote server using websocket message
+			$("#Net_Test").click(function(evt)
+			{
+				// Set Net_Test flag
+				NT_TST = 1;
+				
+				// Considering error condition
+				if(Tornado_Connected == 1)
+				{
+					// Special string that is known to the Server
+					WS_Tornado.send("NET_TEST");
+				}
+				else
+				{
+					// Generic error printing
+					$("#Net_Test_Tornado").html("<b>NET_TEST Failed<br/>Error: NOT Connected to the Server<br/>Try Reloading Page to attempt again</b>");
+				}
+				
+				// Considering error condition
+				if(Node_Connected == 1)
+				{
+					// Special string that is known to the Server
+					WS_Node.send("NET_TEST");
+				}
+				else
+				{
+					// Generic error printing
+					$("#Net_Test_Node").html("<b>NET_TEST Failed<br/>Error: NOT Connected to the Server<br/>Try Reloading Page to attempt again</b>");
+				}
+			});
+      });
+    </script>
+  </head>
+ 
+  <body>
+    <h1>EID Project 2</h1>
+    <div id="message_details">
+        </br></br>
+		<button type="button" id="Get_Single_Tornado">Instant Data - Tornado</button>
+		<button type="button" id="Get_Last_DB">Single DB - Node</button>
+        <br/><br/><button type="button" id="Change_Unit">Flip Unit (C/F)</button>
+		<button type="button" id="Net_Test">Network Test</button>
+    </div>
+	<p id="Tornado_Immediate"></p>
+	<p id="Node_Last_DB"></p>
+	<p id="Net_Test_Tornado"></p>
+	<p id="Net_Test_Node"></p>
+	<p id="Logger"></p>
+  </body>
+</html>
