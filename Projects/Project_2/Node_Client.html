@@ -1,0 +1,165 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Node.js server - HTML client - Websocket Service Page</title>
+    <meta charset="utf-8" />
+    <style type="text/css">
+      body {
+        text-align: left;
+        min-width: 500px;
+      }
+    </style>
+    <script src="http://code.jquery.com/jquery.min.js"></script>
+    <script>
+ 
+      // log function
+      log = function(data){
+        $("div#terminal").prepend("</br>" +data);
+        console.log(data);
+      };
+ 
+      $(document).ready(function () {
+ 
+        var ws;
+		var Connected = 0;
+        var obj;
+		var C_F = 0; //C - 0 & F - 1
+		var Temp_float = 0.0;
+		var Temp_val_str = "0.0";
+		var Temp_str = "0.0";
+		var Humi_str = "0.0";
+		var Final_Str = "";
+		var Node_DB_Str_1 = "<b>Last Database Readings from Node Server</b>";
+		var local_temp = 0.0;
+		var store_temp = 0.0;
+		var NT_TST = 0;
+		var Node_NT_Count = 0;
+		var Table_Str = "";
+		var Tbl_Str_1 = "<br/><b>Network Test: Node Route</b>";
+		var table_format_1 = "<style>table {font-family: arial,sans-serif; order-collapse: collapse; width: 50%;} ";
+        var table_format_2 = "td, th { border: 1px solid #dddddd; text-align: center; padding: 1px;} </style>";
+		var message_0 = "<br/><b>Database Readings in a Table Below</b>";
+        var message_1 = "<table><tr><th><b>Index</b></th><th><b>Humidity</b></th></tr>";
+		var tmp_str1, tmp_str2;
+ 
+          // create websocket instance
+		  ws = new WebSocket("ws://192.168.50.111:9898/");
+
+          // Open Websocket callback
+          ws.onopen = function(evt) { 
+            log("***Connection Opened***");
+			Connected = 1;
+          };
+           
+          // Handle incoming websocket message callback
+          ws.onmessage = function(evt) {
+		  
+				if(NT_TST == 0){
+					obj = JSON.parse(evt.data);
+					Temp_float = parseFloat(obj.Temperature);
+					store_temp = Temp_float;
+					Humi_str = "<br/>Humidity: <b>" + obj.Humidity + "%</b>";
+					if(C_F == 1){
+						Temp_float = (Temp_float * 1.8) + 32;
+						Temp_val_str = Temp_float.toString();
+						Temp_str = "<br/>Temperature: <b>" + Temp_val_str + "*F</b>";
+					}
+					else{
+						Temp_val_str = Temp_float.toString();
+						Temp_str = "<br/>Temperature: <b>" + Temp_val_str + "*C</b>";
+					}
+					
+					Final_Str = Node_DB_Str_1 + Temp_str + Humi_str;
+					
+					$("#Node_Last_DB").html(Final_Str);
+				}
+				
+				else{
+					if(Node_NT_Count == 0){
+						Table_Str = Tbl_Str_1 + table_format_1 + table_format_2 + message_0 + message_1;
+						//Node_NT_Count = Node_NT_Count + 1;
+					}
+					if(Node_NT_Count < 9){
+						obj = JSON.parse(evt.data);
+						tmp_str1 = "<tr><td>" + Node_NT_Count.toString() + "</td><td>";
+						tmp_str2 = obj.Humidity + "%</td></tr>";
+						Table_Str += tmp_str1 + tmp_str2;
+						Node_NT_Count = Node_NT_Count + 1;
+					}
+					else{
+						obj = JSON.parse(evt.data);
+						tmp_str1 = "<tr><td>" + Node_NT_Count.toString() + "</td><td>";
+						tmp_str2 = obj.Humidity + "%</td></tr>";
+						Table_Str += tmp_str1 + tmp_str2;
+						Table_Str += "</table>";
+						$("#Net_Test_Node").html(Table_Str);
+						NT_TST = 0;
+						Node_NT_Count = 0;
+						Table_Str = "";
+					}
+				}
+            };
+ 
+          // Close Websocket callback
+          ws.onclose = function(evt) {
+            log("***Connection Closed***");
+            alert("Connection close");
+			Connected = 0;
+            };
+ 
+        // Send websocket message function
+        $("#Get_Last_DB").click(function(evt) {
+			ws.send("LAST_ENTRY");
+        });
+		
+        $("#Change_Unit").click(function(evt) {
+            //log("Sending Message: FLIP_UNIT");
+			NT_TST = 0;
+			if(C_F == 0){
+				C_F = 1;
+				local_temp = (Temp_float * 1.8) + 32;
+				Temp_val_str = local_temp.toString();
+				Temp_str = "<br/>Temperature: <b>" + Temp_val_str + "*F</b>";
+			}
+			else{
+				C_F = 0;
+				local_temp = store_temp;
+				Temp_val_str = local_temp.toString();
+				Temp_str = "<br/>Temperature: <b>" + Temp_val_str + "*C</b>";
+			}
+			
+			Final_Str = Node_DB_Str_1 + Temp_str + Humi_str;
+			
+			$("#Node_Last_DB").html(Final_Str);
+        });
+		
+        $("#Net_Test").click(function(evt) {
+            //log("Sending Message: NET_TEST");
+			NT_TST = 1;
+			if(Connected == 1){
+				ws.send("NET_TEST");
+			}
+			else{
+				$("#Net_Test_Node").html("<b>NET_TEST Failed<br/>Error: NOT Connected to the Server<br/>Try Reloading Page to attempt again</b>");
+			}
+        });
+ 
+      });
+    </script>
+  </head>
+ 
+  <body>
+    <h1>Node.js server - HTML client - Websocket Service Page</h1>
+    <div id="message_details">
+        </br></br>
+		<button type="button" id="Get_Last_DB">Single DB - Node</button>
+        <button type="button" id="Change_Unit">Flip Unit</button>
+		<button type="button" id="Net_Test">Network Test</button>
+    </div>
+	<p id="Node_Last_DB"></p>
+	<p id="Net_Test_Node"></p>
+    <div id="terminal">
+        
+    </div>
+  </body>
+</html>
