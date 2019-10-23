@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>EID Project 3</title>
+  </head>
+    <body>
+		<h1>EID Project 3</h1>
+		<div id="message_details">
+			</br></br>
+			<button type="button" id="Get_Single" onClick="Get_Single_SQS()">SQS - Single</button>
+			<button type="button" id="Get_All" onClick="Get_All_SQS()">SQS - All</button>
+			<br/><br/><button type="button" id="Get_Count" onClick="Get_Count_SQS()">SQS - Count</button>
+			<button type="button" id="Change_Unit" onClick="Change_Unit_Temp()">Deg. C</button>
+			<button type="button" id="Clear Display" onClick="Clear_All()">Clear Display</button>
+		</div>
+		<p id="Logger">Logger</p>
+		<p id="Count_SQS"></p>
+		<p id="Single_SQS"></p>
+		<p id="All_SQS"></p>
+	
+		<script src="https://sdk.amazonaws.com/js/aws-sdk-2.410.0.min.js"></script>
+		<script type="text/javascript">
+		
+/*
+
+Authors: Poorn Mehta and Rushi Macwan
+
+HTML File for EID Project 3
+
+Connects to AWS SQS
+
+Implements multiple buttons to provide required functionalities.
+
+SQS - Single - Grabs and deletes one SQS message from the Queue
+SQS - All - Grabs and deletes All (Maximum 20, as per project requirement) SQS messages from the Queue
+SQS - Count - Calculates the number of messages pending in the Queue
+Deg. C (or Deg. F) Button: Simply changes the temperature units between Celsius and Fahrenheit, of all displayed data
+Clear Display - Simple erases everything on screen
+
+Contains HTML as well as jQuery and JavaScript coding
+
+Code was developed with help of following References:
+
+https://www.w3schools.com/jquery/
+https://www.w3schools.com/js/default.asp
+https://os.mbed.com/cookbook/Websockets-Server
+https://www.pubnub.com/blog/nodejs-websocket-programmingexamples/
+https://www.w3schools.com/nodejs/nodejs_mysql.asp
+http://www.tornadoweb.org/en/stable/
+https://www.w3schools.com/js/js_json_parse.asp
+https://stackoverflow.com/questions/21634918/extract-a-float-from-a-string-in-javascript
+https://www.w3schools.com/jsref/jsref_tostring_number.asp
+https://api.jquery.com/jquery.parsejson/
+https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_SendMessage.html
+https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/SQS.html#receiveMessage-property
+https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/sqs-examples-send-receive-messages.html
+https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/sqs-examples-using-queues.html
+https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/SQS.html#deleteMessageBatch-property
+https://stackoverflow.com/questions/951021/what-is-the-javascript-version-of-sleep
+
+*/ 
+			// AWS Queue parameter variables
+			var params = {};
+			var deleteParams = {};
+			
+			// HTML Element variables for easy access
+			var Log_Element = document.getElementById('Logger');
+			var Single_SQS_Element = document.getElementById('Single_SQS');
+			var Count_SQS_Element = document.getElementById('Count_SQS');
+			var All_SQS_Element = document.getElementById('All_SQS'); 
+			var Change_Unit_Element = document.getElementById('Change_Unit');
+			
+			// String to contain HTML data that will be printed for logging
+			var printlog = "";
+			
+			// Just to verify that the script is working
+			Log_Element.innerHTML = "<br/>Logger Start";
+			
+			// Table styling variables
+			var Table_Single_Str = "<br/><b>Single SQS Table</b>";
+			var Table_All_Str = "<br/><b>All SQS Table</b>";
+			var Table_Style_1 = "<style>table {font-family: arial,sans-serif; order-collapse: collapse; width: 50%;} ";
+			var Table_Style_2 = "td, th { border: 1px solid #dddddd; text-align: center; padding: 1px;} </style>";
+			var Table_Column_Lables = "<table><tr><th><b>Index</b></th><th><b>Time Stamp</b></th><th><b>Temperature</b></th><th><b>Humidity</b></th></tr>";
+			var Table_Str = "";
+			
+			// Initialize the Amazon Cognito credentials provider
+			AWS.config.region = 'us-east-2'; 
+			AWS.config.credentials = new AWS.CognitoIdentityCredentials({IdentityPoolId:  'us-east-2:383a3ce9-e37b-4f43-ae74-220f79c8fc0a'});
+			
+			// Create an SQS service object
+			var sqs = new AWS.SQS({apiVersion: '2012-11-05'});
+			
+			// URL of the SQS Queue
+			var queueURL = "https://sqs.us-east-2.amazonaws.com/310687527958/EID_Proj3";
+			
+			// Some variables required for SQS operations
+			// Message ID for logging
+			var SQS_MessageId;
+			
+			// Array of messages that are already on screen
+			var SQS_Display_Msg = new Array();
+			
+			// Store single message that is displayed on screen
+			var SQS_Single_Msg;
+			
+			// Maximum number of messages to be displayed on screen
+			var SQS_Max_Msgs = 20;
+			
+			// Keep track of which buttons were pressed
+			var Multi_Called = 0;
+			var Single_Called = 0;
+			
+			// To change temperature display unit, 0: Deg C, 1: Deg F
+			var Curr_Temp_Unit = 0;
+			
+			// No of displayed rows for All SQS button
+			var No_of_Rows = 0;
+			
+			// Store the unit of temperature that the original message contained
+			var Single_Unit = 0;
+			var Multi_Unit = new Array();
+
+			// Message requesting parameters
+			var params = {
+			 AttributeNames: [
+				"SentTimestamp"
+			 ],
+			 MaxNumberOfMessages: 1,
+			 MessageAttributeNames: [
+				"All"
+			 ],
+			 QueueUrl: queueURL,
+			 VisibilityTimeout: 0,
+			 WaitTimeSeconds: 0
+			};
+			
+			// Function to wait for given milliseconds
+			function sleep(ms) 
+			{
+				return new Promise(resolve => setTimeout(resolve, ms));
+			}
+
+			// Function to read number of SQS messages in the queue
+			async function Get_Count_SQS() 
+			{
+				var i, j;
+				printlog += "<br/><b>Calculating...</b>";
+				Log_Element.innerHTML = printlog;
+				
+				// Resetting some variables, and an array
+				var SQS_MessageCount = 0;
+				var SQS_Message_Arr = new Array();
+				
+				for(i = 0; i < 100; i ++)
+				{
+					SQS_Message_Arr[i] = 0;
+				}
+				
+				// Support as much as 100 messages, with duplication filtering
+				for(i = 0; i < 100; i ++)
+				{
+					// Logging
+					//printlog = "<br/><b>Calculating...</b>";
+					//Log_Element.innerHTML = printlog;
+					
+					// Receive multiple messages and don't delete
+					sqs.receiveMessage(params, function(err, data)
+					{
+						// Check for errors
+						if(err) 
+						{
+							printlog = "<br/><b>READ ERROR: " + JSON.stringify(err) + "</b>";
+							Log_Element.innerHTML = printlog;
+						}
+						
+						else if(data.Messages)
+						{	
+							// Check for empty messages
+							if(JSON.stringify(data.Messages) == "[]")
+							{
+								i = 100;
+							}
+							else
+							{
+								// If it's first message, simply store the index
+								if(SQS_MessageCount == 0)
+								{
+									SQS_Message_Arr[SQS_MessageCount] = data.Messages[0].MessageAttributes.Msg_ID.StringValue;
+									SQS_MessageCount += 1;
+								}
+								else
+								{
+									// Duplication filtering 
+									for(j = 0; j <= i; j ++)
+									{
+										if(SQS_Message_Arr[j] == data.Messages[0].MessageAttributes.Msg_ID.StringValue)
+										{
+											j = i + 10;
+										}
+									}
+									
+									// Unique message found
+									if(j < (i + 10))
+									{
+										SQS_Message_Arr[SQS_MessageCount] = data.Messages[0].MessageAttributes.Msg_ID.StringValue;
+										SQS_MessageCount += 1;
+									}
+								}
+							}
+						}
+						
+						// Error handling
+						else
+						{
+							printlog = "<br/><b>SQS Empty</b>";
+							Log_Element.innerHTML = printlog;
+						}
+					});
+					// Sleeping for some time
+					await sleep(50);
+				}
+				
+				// Pritning Results
+				printlog += "<br/><b>Got Counts</b>";
+				Log_Element.innerHTML = printlog;
+				Count_SQS_Element.innerHTML = "<br/><b>Number of Unique Messages in Queue: " + SQS_MessageCount.toString() + "</b>";
+			}
+
+			// Function to get a single SQS message
+			function Get_Single_SQS() 
+			{
+				// Initiazling table string
+				Table_Str = Table_Single_Str + Table_Style_1 + Table_Style_2 + Table_Column_Lables;
+				
+				// Calling receive message function from AWS SDK
+				sqs.receiveMessage(params, function(err, data)
+				{
+					// Check for errors
+					if(err) 
+					{
+						printlog = "<br/><b>READ ERROR: " + JSON.stringify(err) + "</b>";
+						Log_Element.innerHTML = printlog;
+					}
+					
+					else if(data.Messages)
+					{
+						// Check if the received message is null
+						if(JSON.stringify(data.Messages) == "[]")
+						{
+							printlog = "<br/><b>Single Read Empty</b>";
+							Log_Element.innerHTML = printlog;
+						}
+						else
+						{
+							// Indicate that the single button press was successful
+							Single_Called = 1;
+							printlog = "<br/><b>Single SQS Success</b>";
+							
+							// Logging
+							SQS_Single_Msg = data.Messages[0];
+							SQS_MessageId = data.Messages[0].MessageId;
+							printlog += "<br/><b>Pulled: " + SQS_MessageId + "</b>";
+							Log_Element.innerHTML = printlog;
+
+							// Displaying data in tabular form as required by the project
+							Table_Str += "<tr><td>" + data.Messages[0].MessageAttributes.Msg_ID.StringValue + "</td><td>";
+							Table_Str += data.Messages[0].MessageAttributes.Timestamp.StringValue + "</td><td>";
+							Table_Str += data.Messages[0].MessageAttributes.Temperature.StringValue;
+							
+							// Check and store the unit of temperature contained in the message
+							if(data.Messages[0].MessageAttributes.Temp_Unit.StringValue == 1)
+							{
+								Table_Str += "F</td><td>";
+								Curr_Temp_Unit = 1;
+								Single_Unit = 1;
+								Change_Unit_Element.innerHTML = "Deg. F";
+							}
+							else
+							{
+								Table_Str += "C</td><td>";
+								Curr_Temp_Unit = 0;
+								Single_Unit = 0;
+								Change_Unit_Element.innerHTML = "Deg. C";
+							}
+							
+							// Complete formatting of table, and display it
+							Table_Str += data.Messages[0].MessageAttributes.Humidity.StringValue + "%</td></tr>";
+							Single_SQS_Element.innerHTML = Table_Str;
+						
+							// Delete the processed message
+							deleteParams = {QueueUrl: queueURL, ReceiptHandle: data.Messages[0].ReceiptHandle};
+							sqs.deleteMessage(deleteParams, function(err, data)
+							{
+								// Check for errors while attempting to delete
+								if(err)
+								{
+									printlog = "<br/><b>DEL ERROR: " + JSON.stringify(err) + "</b>";
+									Log_Element.innerHTML = printlog;
+								}
+								else
+								{
+									// Logging
+									printlog += "<br/><b>Deleted: " + SQS_MessageId + "</b>";
+									Log_Element.innerHTML = printlog;
+								}
+							}); 
+						}
+					}
+					
+					// Handling error conditions
+					else
+					{
+						printlog = "<br/><b>Single Read Empty</b>";
+						Log_Element.innerHTML = printlog;
+					}
+				});
+				
+				// Updating count
+				Get_Count_SQS();
+			}
+			
+			// Function to get a all SQS messages
+			async function Get_All_SQS() 
+			{
+				var i;
+				
+				Table_Str = Table_All_Str + Table_Style_1 + Table_Style_2 + Table_Column_Lables;
+				printlog = "";
+				
+				// Resetting displayed message array
+				SQS_Display_Msg = new Array();
+
+				// Looping to grab every single message
+				for(i = 0; i < SQS_Max_Msgs; i ++)
+				{
+					// Calling receive message function from AWS SDK
+					sqs.receiveMessage(params, function(err, data)
+					{
+						// Check for errors
+						if(err) 
+						{
+							printlog = "<br/><b>READ ERROR: " + JSON.stringify(err) + "</b>";
+							Log_Element.innerHTML = printlog;
+						}
+						
+						else if(data.Messages)
+						{	
+							// Indicate that the all sqs button press was successful
+							Multi_Called = 1;
+								
+							// Check if the last received message is null
+							if(JSON.stringify(data.Messages) == "[]")
+							{
+								// Store the number rows that will be printed
+								No_of_Rows = i;
+								
+								// Print message that Queue is now empty
+								printlog += "<br/><b>SQS Empty</b>";
+								Log_Element.innerHTML = printlog;
+								
+								// Print rest of the table
+								All_SQS_Element.innerHTML = Table_Str;
+								
+								// Give offset to i for possible checking conditions outside the loop, and to break the for()
+								i = SQS_Max_Msgs + 10;
+							}
+							else
+							{
+								// Getting message ID for easy debugging
+								SQS_MessageId = data.Messages[0].MessageId;
+								printlog += "<br/><b>Pulled: " + SQS_MessageId + "</b>";
+								Log_Element.innerHTML = printlog;
+								
+								// Keep on printing table string
+								All_SQS_Element.innerHTML = Table_Str;
+								
+								// Saving messages for Unit conversion processing and display update
+								SQS_Display_Msg[i] = data.Messages[0];
+								
+								// Table formatting and filling in row with data cells
+								Table_Str += "<tr><td>" + data.Messages[0].MessageAttributes.Msg_ID.StringValue + "</td><td>";
+								Table_Str += data.Messages[0].MessageAttributes.Timestamp.StringValue + "</td><td>";
+								Table_Str += data.Messages[0].MessageAttributes.Temperature.StringValue;
+								
+								// Check and store the unit of temperature contained in the message
+								if(data.Messages[0].MessageAttributes.Temp_Unit.StringValue == 1)
+								{
+									Table_Str += "F</td><td>";
+									Curr_Temp_Unit = 1;
+									Multi_Unit[i] = 1;
+									Change_Unit_Element.innerHTML = "Deg. F";
+								}
+								else
+								{
+									Table_Str += "C</td><td>";
+									Curr_Temp_Unit = 0;
+									Multi_Unit[i] = 0;
+									Change_Unit_Element.innerHTML = "Deg. C";
+								}
+								
+								// Final formatting before the new row begins
+								Table_Str += data.Messages[0].MessageAttributes.Humidity.StringValue + "%</td></tr>";
+								
+								// Deleting the processed message
+								deleteParams = {QueueUrl: queueURL, ReceiptHandle: data.Messages[0].ReceiptHandle};
+								sqs.deleteMessage(deleteParams, function(err, data) 
+								{
+									// Check for errors while attempting to delete
+									if(err)
+									{
+										printlog = "<br/><b>DEL ERROR: " + JSON.stringify(err) + "</b>";
+										Log_Element.innerHTML = printlog;
+									}
+									else
+									{
+										// Logging
+										printlog += "<br/><b>Deleted: " + SQS_MessageId + "</b>";
+										Log_Element.innerHTML = printlog;
+									}
+								});
+							}
+						}
+						
+						// Handling error conditions
+						else
+						{
+							printlog = "<br/><b>Single Read Empty</b>";
+							Log_Element.innerHTML = printlog;
+						}
+					});
+					
+					// This sleep is required otherwise the read requests will be too fast to handle for SQS
+					await sleep(250);
+				}
+				
+				// If the iterations are less than 30 then for loop ran fully, and there will be 20 rows in display
+				if(i < (SQS_Max_Msgs + 10))
+				{
+					No_of_Rows = SQS_Max_Msgs;
+				}
+				
+				// Updating count
+				Get_Count_SQS();
+			}
+			
+			// Function to change units
+			async function Change_Unit_Temp()
+			{
+				var i;
+				var Temp_Val;
+				
+				// Check which section needs to be redisplayed
+				
+				if(Single_Called == 1)
+				{
+					// Table formatting
+					Table_Str = Table_Single_Str + Table_Style_1 + Table_Style_2 + Table_Column_Lables;
+					Table_Str += "<tr><td>" + SQS_Single_Msg.MessageAttributes.Msg_ID.StringValue + "</td><td>";
+					Table_Str += SQS_Single_Msg.MessageAttributes.Timestamp.StringValue + "</td><td>";
+
+					Temp_Val = parseFloat(SQS_Single_Msg.MessageAttributes.Temperature.StringValue);
+					
+					// Conversion
+					
+					if(Curr_Temp_Unit == 0) // C to F
+					{
+						if(Single_Unit == 0)
+						{
+							Temp_Val *= 1.8;
+							Temp_Val += 32;
+						}
+						Table_Str += Temp_Val.toFixed(1) + "F</td><td>";
+					}
+					else
+					{
+						if(Single_Unit == 1)
+						{
+							Temp_Val -= 32;
+							Temp_Val /= 1.8;
+						}
+						Table_Str += Temp_Val.toFixed(1) + "C</td><td>";
+					}
+					
+					Table_Str += SQS_Single_Msg.MessageAttributes.Humidity.StringValue + "%</td></tr>";
+					Single_SQS_Element.innerHTML = Table_Str;
+				}
+				
+				if(Multi_Called == 1)
+				{
+				
+					Table_Str = Table_All_Str + Table_Style_1 + Table_Style_2 + Table_Column_Lables;
+					
+					// Table formatting from stored messages
+					for(i = 0; i < No_of_Rows; i ++)
+					{
+						Table_Str += "<tr><td>" + SQS_Display_Msg[i].MessageAttributes.Msg_ID.StringValue + "</td><td>";
+						Table_Str += SQS_Display_Msg[i].MessageAttributes.Timestamp.StringValue + "</td><td>";
+						
+						Temp_Val = parseFloat(SQS_Display_Msg[i].MessageAttributes.Temperature.StringValue);
+						
+						// Conversion
+						
+						if(Curr_Temp_Unit == 0) // C to F 
+						{
+							if(Multi_Unit[i] == 0)
+							{
+								Temp_Val *= 1.8;
+								Temp_Val += 32;
+							}
+							Table_Str += Temp_Val.toFixed(1) + "F</td><td>";
+						}
+						else
+						{
+							if(Multi_Unit[i] == 1)
+							{
+								Temp_Val -= 32;
+								Temp_Val /= 1.8;
+							}
+							Table_Str += Temp_Val.toFixed(1) + "C</td><td>";
+						}
+						
+						Table_Str += SQS_Display_Msg[i].MessageAttributes.Humidity.StringValue + "%</td></tr>";
+						All_SQS_Element.innerHTML = Table_Str;
+						await sleep(50);
+					}
+				}
+				
+				// Error handling
+				if((Single_Called == 0) && (Multi_Called == 0))
+				{
+					Log_Element.innerHTML = "<br/><b>No data to Convert</b>";
+				}
+				
+				// Changing button name
+				
+				if(Curr_Temp_Unit == 0)
+				{
+					Curr_Temp_Unit = 1;
+					Change_Unit_Element.innerHTML = "Deg. F";
+				}
+				else
+				{
+					Curr_Temp_Unit = 0;
+					Change_Unit_Element.innerHTML = "Deg. C";
+				}
+			}
+			
+			// To clear display
+			function Clear_All()
+			{
+				Multi_Called = 0;
+				Single_Called = 0;
+				Curr_Temp_Unit = 0;
+				SQS_Display_Msg = new Array();
+				Log_Element.innerHTML = "";
+				Count_SQS_Element.innerHTML = "";
+				Single_SQS_Element.innerHTML = "";
+				All_SQS_Element.innerHTML = "";
+			}
+		
+		</script>
+  </body>
+</html>
