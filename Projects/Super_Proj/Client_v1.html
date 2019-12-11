@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8">
+		<title>Ultra-Low Power Mesh Security System</title>
+		<style>
+			table {
+			  font-family: arial, sans-serif;
+			  border-collapse: collapse;
+			  width: 75%;
+			}
+
+			td, th {
+			  border: 2px solid #dddddd;
+			  text-align: center;
+			  padding: 10px;
+			}
+
+		</style>
+	</head>
+    <body>
+		<h1>Ultra-Low Power Mesh Security System</h1>
+		<br/><br/>
+		<table>
+			<tr>
+				<th></th>
+				<th><input type="checkbox" id="Monday_Sel">Monday</th>
+				<th><input type="checkbox" id="Tuesday_Sel">Tuesday</th>
+				<th><input type="checkbox" id="Wednesday_Sel">Wednesday</th>
+				<th><input type="checkbox" id="Thursday_Sel">Thursday</th>
+				<th><input type="checkbox" id="Friday_Sel">Friday</th>
+				<th><input type="checkbox" id="Saturday_Sel">Saturday</th>
+				<th><input type="checkbox" id="Sunday_Sel">Sunday</th>
+			</tr>
+			<tr>
+				<td>Shift Start Time</td>
+				<td><input type="time" id="Mon_ST" value="09:00"></td>
+				<td><input type="time" id="Tue_ST" value="09:00"></td>
+				<td><input type="time" id="Wed_ST" value="09:00"></td>
+				<td><input type="time" id="Thu_ST" value="09:00"></td>
+				<td><input type="time" id="Fri_ST" value="09:00"></td>
+				<td><input type="time" id="Sat_ST" value="00:00"></td>
+				<td><input type="time" id="Sun_ST" value="00:00"></td>
+			</tr>
+			<tr>
+				<td>Shift End Time</td>
+				<td><input type="time" id="Mon_ET" value="17:00"></td>
+				<td><input type="time" id="Tue_ET" value="17:00"></td>
+				<td><input type="time" id="Wed_ET" value="17:00"></td>
+				<td><input type="time" id="Thu_ET" value="17:00"></td>
+				<td><input type="time" id="Fri_ET" value="17:00"></td>
+				<td><input type="time" id="Sat_ET" value="00:00"></td>
+				<td><input type="time" id="Sun_ET" value="00:00"></td>
+			</tr>
+		</table>
+		
+		<br/><br/>
+		
+		<button type="button" id="Set_Schedule" onClick="Update_Schedule()">Update Schedule</button>
+		
+		<br/><br/><br/>
+		
+		Fingerprint Timeout Minutes:<input type="text" id="FP_Timeout" value="1" maxlength="3" size="3">
+		<button type="button" id="Set_FP" onClick="Update_FP()">Update Timeout</button>
+		
+		<br/><br/><br/>
+		
+		<button type="button" id="Get_DB" onClick="Get_DB_Table()">Get Database</button>
+		<button type="button" id="Del_DB" onClick="Erase_DB()">Delete Database</button>
+		<br/><br/>Max DB Entries:<input type="text" id="Max_DB" value="20" maxlength="3" size="3">
+		<button type="button" id="Set_DB" onClick="Update_DB()">Update Entries</button>
+		
+		<br/><br/>
+		
+		Please Click Here to Log Out:<button type="button" id="End_Auth" onClick="Log_Out()">End Session</button>
+		
+		<p id="DB_Para"></p>
+		
+		<p id="Alert_Para"></p>
+		<p id="Logger_Para"></p>
+	
+		<script src="https://sdk.amazonaws.com/js/aws-sdk-2.410.0.min.js"></script>
+		<script type="text/javascript">
+		
+/*
+
+		<select id="Building_Select">
+			<option value="B1">Building 1</option>
+			<option value="B2">Building 2</option>
+		</select>
+		
+		<button type="button" id="Set_Building" onClick="Building_Selection()">Select Building</button>
+
+Authors: Poorn Mehta and Rushi Macwan
+
+src="http://code.jquery.com/jquery.min.js"
+src="https://sdk.amazonaws.com/js/aws-sdk-2.410.0.min.js"
+
+<script type="text/javascript">
+
+HTML File for EID Project 3
+
+Connects to AWS SQS
+
+Implements multiple buttons to provide required functionalities.
+
+SQS - Single - Grabs and deletes one SQS message from the Queue
+SQS - All - Grabs and deletes All (Maximum 20, as per project requirement) SQS messages from the Queue
+SQS - Count - Calculates the number of messages pending in the Queue
+Deg. C (or Deg. F) Button: Simply changes the temperature units between Celsius and Fahrenheit, of all displayed data
+Clear Display - Simple erases everything on screen
+
+Contains HTML as well as jQuery and JavaScript coding
+
+Code was developed with help of following References:
+
+https://www.w3schools.com/jquery/
+https://www.w3schools.com/js/default.asp
+https://os.mbed.com/cookbook/Websockets-Server
+https://www.pubnub.com/blog/nodejs-websocket-programmingexamples/
+https://www.w3schools.com/nodejs/nodejs_mysql.asp
+http://www.tornadoweb.org/en/stable/
+https://www.w3schools.com/js/js_json_parse.asp
+https://stackoverflow.com/questions/21634918/extract-a-float-from-a-string-in-javascript
+https://www.w3schools.com/jsref/jsref_tostring_number.asp
+https://api.jquery.com/jquery.parsejson/
+https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_SendMessage.html
+https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/SQS.html#receiveMessage-property
+https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/sqs-examples-send-receive-messages.html
+https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/sqs-examples-using-queues.html
+https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/SQS.html#deleteMessageBatch-property
+https://stackoverflow.com/questions/951021/what-is-the-javascript-version-of-sleep
+
+*/ 
+		// Target IP Address
+		var Target_IP = "192.168.50.92";
+		
+		// Port used by Tornado websocket
+		var Tornado_Port = "8888";
+		
+		// Tornado webserver handler
+		var WS_Tornado;
+		
+		// Status indicator for tornado websocket connection
+		var Tornado_Connected = 0;
+		
+		// To check whether any Immediate Tornado requests have taken place or not
+		var Tornado_Req = 0;
+		
+		// HTML Element variables for easy access
+		var Alert_Element = document.getElementById('Alert_Para');
+		var Log_Element = document.getElementById('Logger_Para'); 
+		var DB_Element = document.getElementById('DB_Para');
+		
+		var Mon_Sel = document.getElementById('Monday_Sel');
+		var Tue_Sel = document.getElementById('Tuesday_Sel');
+		var Wed_Sel = document.getElementById('Wednesday_Sel');
+		var Thu_Sel = document.getElementById('Thursday_Sel');
+		var Fri_Sel = document.getElementById('Friday_Sel');
+		var Sat_Sel = document.getElementById('Saturday_Sel');
+		var Sun_Sel = document.getElementById('Sunday_Sel');
+		
+		var Mon_ST_Val	= document.getElementById('Mon_ST');
+		var Tue_ST_Val	= document.getElementById('Tue_ST');
+		var Wed_ST_Val	= document.getElementById('Wed_ST');
+		var Thu_ST_Val	= document.getElementById('Thu_ST');
+		var Fri_ST_Val	= document.getElementById('Fri_ST');
+		var Sat_ST_Val	= document.getElementById('Sat_ST');
+		var Sun_ST_Val	= document.getElementById('Sun_ST');
+		
+		var Mon_ET_Val	= document.getElementById('Mon_ET');
+		var Tue_ET_Val	= document.getElementById('Tue_ET');
+		var Wed_ET_Val	= document.getElementById('Wed_ET');
+		var Thu_ET_Val	= document.getElementById('Thu_ET');
+		var Fri_ET_Val	= document.getElementById('Fri_ET');
+		var Sat_ET_Val	= document.getElementById('Sat_ET');
+		var Sun_ET_Val	= document.getElementById('Sun_ET');
+		
+		var Update_Button = document.getElementById("Set_Schedule");
+		var FP_Button = document.getElementById("Set_FP"); 
+		var Del_DB_Button = document.getElementById("Del_DB"); 
+		var Set_DB_Button = document.getElementById("Set_DB");
+		
+		var FP_Val = document.getElementById("FP_Timeout");
+		
+		var DB_Val = document.getElementById("Max_DB");
+		
+		var DT_H, DT_Min, ST_Min, ET_Min;
+		
+		var printlog = "";
+		
+		var Incoming_String = "";
+		var Incoming_Command = "";
+		
+		var Response_String = "";
+		
+		var Clear_String = "CLR";
+		var Alert_String = "ALT";
+		var Low_Bat_String = "LOW";
+		
+		var Mon_Query_String = "MON";
+		var Tue_Query_String = "TUE";
+		var Wed_Query_String = "WED";
+		var Thu_Query_String = "THU";
+		var Fri_Query_String = "FRI";
+		var Sat_Query_String = "SAT";
+		var Sun_Query_String = "SUN";
+		
+		var RFID_Auth_String = "RID";
+		
+		
+		var Get_DB_String = "MYSQL";
+		var Resp_DB_String = "SQL";
+		var Del_DB_String = "DELDB";
+		var DB_Update_String = "DB";
+		
+		Mon_Sel.checked = true;
+		Tue_Sel.checked = true;
+		Wed_Sel.checked = true;
+		Thu_Sel.checked = true;
+		Fri_Sel.checked = true;
+		
+		Disable_All();
+		
+		// Try to connect to remote Tornado Server
+		WS_Tornado = new WebSocket("ws://" + Target_IP + ":" + Tornado_Port + "/ws");
+		
+		// Tornado Websocket Open Callback
+		WS_Tornado.onopen = function(evt) 
+		{
+			printlog = "<br/><b>Tornado Server Connection Opened</b>";
+			Log_Element.innerHTML = printlog;
+			
+			// Raise the flag to indicate that the Tornado Server connection has been successfull
+			Tornado_Connected = 1;
+		};
+	  
+		// Close Tornado Websocket callback
+		WS_Tornado.onclose = function(evt) 
+		{
+			printlog = "<br/><b>Tornado Server Connection Closed</b>";
+			Log_Element.innerHTML = printlog;
+			
+			// Indicate to the rest of the code that the Tornado connection has been broken
+			Tornado_Connected = 0;
+			
+			Disable_All();
+		};
+	  
+		// Tornado Incoming Messages Callback
+		WS_Tornado.onmessage = function(evt) 
+		{
+			Incoming_String = evt.data;
+			Incoming_Command = Incoming_String.substring(0,3);
+			
+			if(Incoming_Command == Alert_String)
+			{
+				Alert_Element.innerHTML = "<br/><b>Security Breach ALERT in Node: " + parseInt(Incoming_String.substring(3,5))  + "</b>";
+			}
+			
+			else if(Incoming_Command == Low_Bat_String)
+			{
+				Alert_Element.innerHTML = "<br/><b>Low Battery Alert in Node: " + parseInt(Incoming_String.substring(3,5))  + "</b>";
+			}
+			
+			else if(Incoming_Command == Clear_String)
+			{
+				Alert_Element.innerHTML = "<br/><b>No Alerts</b>";
+			}
+			
+			else if(Incoming_Command == RFID_Auth_String)
+			{
+				printlog = "<br/><b>Operator #" + parseInt(Incoming_String.substring(3,5)) + "Identified. Enabling Access...</b>";
+				Log_Element.innerHTML = printlog;
+				Enable_All();
+			}
+			
+			else if(Incoming_Command == Resp_DB_String)
+			{
+				printlog = "<br/><b>Got Response for Database Query</b>";
+				Log_Element.innerHTML = printlog;
+				DB_Element.innerHTML = Incoming_String.substring(3);
+			}
+			
+			else
+			{
+				if(Incoming_Command == Mon_Query_String)
+				{
+					Mon_Update();
+					Response_String = Mon_Query_String + DT_H.padStart(2, '0') + "H" + DT_Min.padStart(2, '0') + "M" + Mon_ST_Val.value;
+					printlog = "<br/>Got Query String:<b>" + Mon_Query_String + "</b>";
+				}
+				
+				else if(Incoming_Command == Tue_Query_String)
+				{
+					Tue_Update();
+					Response_String = Tue_Query_String + DT_H.padStart(2, '0') + "H" + DT_Min.padStart(2, '0') + "M" + Tue_ST_Val.value;
+					printlog = "<br/>Got Query String:<b>" + Tue_Query_String + "</b>";
+				}
+				
+				else if(Incoming_Command == Wed_Query_String)
+				{
+					Wed_Update();
+					Response_String = Wed_Query_String + DT_H.padStart(2, '0') + "H" + DT_Min.padStart(2, '0') + "M" + Wed_ST_Val.value;
+					printlog = "<br/>Got Query String:<b>" + Wed_Query_String + "</b>";
+				}
+				
+				else if(Incoming_Command == Thu_Query_String)
+				{
+					Thu_Update();
+					Response_String = Thu_Query_String + DT_H.padStart(2, '0') + "H" + DT_Min.padStart(2, '0') + "M" + Thu_ST_Val.value;
+					printlog = "<br/>Got Query String:<b>" + Thu_Query_String + "</b>";
+				}
+				
+				else if(Incoming_Command == Fri_Query_String)
+				{
+					Fri_Update();
+					Response_String = Fri_Query_String + DT_H.padStart(2, '0') + "H" + DT_Min.padStart(2, '0') + "M" + Fri_ST_Val.value;
+					printlog = "<br/>Got Query String:<b>" + Fri_Query_String + "</b>";
+				}
+				
+				else if(Incoming_Command == Sat_Query_String)
+				{
+					Sat_Update();
+					Response_String = Sat_Query_String + DT_H.padStart(2, '0') + "H" + DT_Min.padStart(2, '0') + "M" + Sat_ST_Val.value;
+					printlog = "<br/>Got Query String:<b>" + Sat_Query_String + "</b>";
+				}
+				
+				else if(Incoming_Command == Sun_Query_String)
+				{
+					Sun_Update();
+					Response_String = Sun_Query_String + DT_H.padStart(2, '0') + "H" + DT_Min.padStart(2, '0') + "M" + Sun_ST_Val.value;
+					printlog = "<br/>Got Query String:<b>" + Sun_Query_String + "</b>";
+				}
+				
+				else
+				{
+					Response_String = "ERR";
+					printlog = "<br/><b>Unrecognized String</b>";
+					Log_Element.innerHTML = printlog;
+				}
+				
+				if(Response_String != "ERR")
+				{
+					printlog += "<br/>Sent String:<b>" + Response_String + "</b>";
+					Log_Element.innerHTML = printlog;
+					WS_Tornado.send(Response_String);
+				}
+			}
+		};
+		
+		function Disable_All()
+		{
+			Update_Button.disabled = true;
+			FP_Button.disabled = true;
+			Del_DB_Button.disabled = true;
+			Set_DB_Button.disabled = true;
+			
+			Mon_Sel.disabled = true;
+			Tue_Sel.disabled = true;
+			Wed_Sel.disabled = true;
+			Thu_Sel.disabled = true;
+			Fri_Sel.disabled = true;
+			Sat_Sel.disabled = true;
+			Sun_Sel.disabled = true;
+
+			Mon_ST_Val.disabled = true;
+			Tue_ST_Val.disabled = true;
+			Wed_ST_Val.disabled = true;
+			Thu_ST_Val.disabled = true;
+			Fri_ST_Val.disabled = true;
+			Sat_ST_Val.disabled = true;
+			Sun_ST_Val.disabled = true;
+
+			Mon_ET_Val.disabled = true;
+			Tue_ET_Val.disabled = true;
+			Wed_ET_Val.disabled = true;
+			Thu_ET_Val.disabled = true;
+			Fri_ET_Val.disabled = true;
+			Sat_ET_Val.disabled = true;
+			Sun_ET_Val.disabled = true;
+		}
+		
+		function Enable_All()
+		{
+			Update_Button.disabled = false;
+			FP_Button.disabled = false;
+			Del_DB_Button.disabled = false;
+			Set_DB_Button.disabled = false;
+			
+			Mon_Sel.disabled = false;
+			Tue_Sel.disabled = false;
+			Wed_Sel.disabled = false;
+			Thu_Sel.disabled = false;
+			Fri_Sel.disabled = false;
+			Sat_Sel.disabled = false;
+			Sun_Sel.disabled = false;
+
+			Mon_ST_Val.disabled = false;
+			Tue_ST_Val.disabled = false;
+			Wed_ST_Val.disabled = false;
+			Thu_ST_Val.disabled = false;
+			Fri_ST_Val.disabled = false;
+			Sat_ST_Val.disabled = false;
+			Sun_ST_Val.disabled = false;
+
+			Mon_ET_Val.disabled = false;
+			Tue_ET_Val.disabled = false;
+			Wed_ET_Val.disabled = false;
+			Thu_ET_Val.disabled = false;
+			Fri_ET_Val.disabled = false;
+			Sat_ET_Val.disabled = false;
+			Sun_ET_Val.disabled = false;
+		}
+	
+		function Mon_Update()
+		{
+			if(Mon_Sel.checked == true)
+			{
+				printlog += "<br/>Monday Workday ";
+				
+				DT_H = parseInt(Mon_ET_Val.value) - parseInt(Mon_ST_Val.value);
+				ET_Min = parseInt(Mon_ET_Val.value.substring(3,5));
+				ST_Min = parseInt(Mon_ST_Val.value.substring(3,5));
+				
+				if(ST_Min > ET_Min)
+				{
+					DT_H -= 1;
+					DT_Min = 60 - (ST_Min - ET_Min);
+				}
+				else
+				{
+					DT_Min = ET_Min - ST_Min;
+				}
+				
+				printlog += "- Duration: " + DT_H + "H " + DT_Min + "M";
+			}
+			else
+			{
+				printlog += "<br/>Monday Holiday";
+				DT_H = "0";
+				DT_Min = "0";
+			}
+		}
+		
+		function Tue_Update()
+		{
+			if(Tue_Sel.checked == true)
+			{
+				printlog += "<br/>Tuesday Workday";
+				
+				DT_H = parseInt(Tue_ET_Val.value) - parseInt(Tue_ST_Val.value);
+				ET_Min = parseInt(Tue_ET_Val.value.substring(3,5));
+				ST_Min = parseInt(Tue_ST_Val.value.substring(3,5));
+				
+				if(ST_Min > ET_Min)
+				{
+					DT_H -= 1;
+					DT_Min = 60 - (ST_Min - ET_Min);
+				}
+				else
+				{
+					DT_Min = ET_Min - ST_Min;
+				}
+				
+				printlog += "- Duration: " + DT_H + "H " + DT_Min + "M";
+			}
+			else
+			{
+				printlog += "<br/>Tuesday Holiday";
+				DT_H = "0";
+				DT_Min = "0";
+			}
+		}
+		
+		function Wed_Update()
+		{
+			if(Wed_Sel.checked == true)
+			{
+				printlog += "<br/>Wednesday Workday";
+				
+				DT_H = parseInt(Wed_ET_Val.value) - parseInt(Wed_ST_Val.value);
+				ET_Min = parseInt(Wed_ET_Val.value.substring(3,5));
+				ST_Min = parseInt(Wed_ST_Val.value.substring(3,5));
+				
+				if(ST_Min > ET_Min)
+				{
+					DT_H -= 1;
+					DT_Min = 60 - (ST_Min - ET_Min);
+				}
+				else
+				{
+					DT_Min = ET_Min - ST_Min;
+				}
+				
+				printlog += "- Duration: " + DT_H + "H " + DT_Min + "M";
+			}
+			else
+			{
+				printlog += "<br/>Wednesday Holiday";
+				DT_H = "0";
+				DT_Min = "0";
+			}
+		}
+		
+		function Thu_Update()
+		{
+			if(Thu_Sel.checked == true)
+			{
+				printlog += "<br/>Thursday Workday";
+				
+				DT_H = parseInt(Thu_ET_Val.value) - parseInt(Thu_ST_Val.value);
+				ET_Min = parseInt(Thu_ET_Val.value.substring(3,5));
+				ST_Min = parseInt(Thu_ST_Val.value.substring(3,5));
+				
+				if(ST_Min > ET_Min)
+				{
+					DT_H -= 1;
+					DT_Min = 60 - (ST_Min - ET_Min);
+				}
+				else
+				{
+					DT_Min = ET_Min - ST_Min;
+				}
+				
+				printlog += "- Duration: " + DT_H + "H " + DT_Min + "M";
+			}
+			else
+			{
+				printlog += "<br/>Thursday Holiday";
+				DT_H = "0";
+				DT_Min = "0";
+			}
+		}
+		
+		function Fri_Update()
+		{
+			if(Fri_Sel.checked == true)
+			{
+				printlog += "<br/>Friday Workday";
+				
+				DT_H = parseInt(Fri_ET_Val.value) - parseInt(Fri_ST_Val.value);
+				ET_Min = parseInt(Fri_ET_Val.value.substring(3,5));
+				ST_Min = parseInt(Fri_ST_Val.value.substring(3,5));
+				
+				if(ST_Min > ET_Min)
+				{
+					DT_H -= 1;
+					DT_Min = 60 - (ST_Min - ET_Min);
+				}
+				else
+				{
+					DT_Min = ET_Min - ST_Min;
+				}
+				
+				printlog += "- Duration: " + DT_H + "H " + DT_Min + "M";
+			}
+			else
+			{
+				printlog += "<br/>Friday Holiday";
+				DT_H = "0";
+				DT_Min = "0";
+			}
+		}
+		
+		function Sat_Update()
+		{
+			if(Sat_Sel.checked == true)
+			{
+				printlog += "<br/>Saturday Workday";
+				
+				DT_H = parseInt(Sat_ET_Val.value) - parseInt(Sat_ST_Val.value);
+				ET_Min = parseInt(Sat_ET_Val.value.substring(3,5));
+				ST_Min = parseInt(Sat_ST_Val.value.substring(3,5));
+				
+				if(ST_Min > ET_Min)
+				{
+					DT_H -= 1;
+					DT_Min = 60 - (ST_Min - ET_Min);
+				}
+				else
+				{
+					DT_Min = ET_Min - ST_Min;
+				}
+				
+				printlog += "- Duration: " + DT_H + "H " + DT_Min + "M";
+			}
+			else
+			{
+				printlog += "<br/>Saturday Holiday";
+				DT_H = "0";
+				DT_Min = "0";
+			}
+		}
+		
+		function Sun_Update()
+		{
+			if(Sun_Sel.checked == true)
+			{
+				printlog += "<br/>Sunday Workday";
+				
+				DT_H = parseInt(Sun_ET_Val.value) - parseInt(Sun_ST_Val.value);
+				ET_Min = parseInt(Sun_ET_Val.value.substring(3,5));
+				ST_Min = parseInt(Sun_ST_Val.value.substring(3,5));
+				
+				if(ST_Min > ET_Min)
+				{
+					DT_H -= 1;
+					DT_Min = 60 - (ST_Min - ET_Min);
+				}
+				else
+				{
+					DT_Min = ET_Min - ST_Min;
+				}
+				
+				printlog += "- Duration: " + DT_H + "H " + DT_Min + "M";
+			}
+			else
+			{
+				printlog += "<br/>Sunday Holiday";
+				DT_H = "0";
+				DT_Min = "0";
+			}
+		}
+		
+		function Update_Schedule()
+		{
+			printlog = "";
+			
+			// Monday Checked
+			Mon_Update();
+			
+			// Tuesday Checked
+			Tue_Update();
+			
+			// Wednesday Checked
+			Wed_Update();
+			
+			// Thursday Checked
+			Thu_Update();
+			
+			// Friday Checked
+			Fri_Update();
+			
+			// Saturday Checked
+			Sat_Update();
+			
+			// Sunday Checked
+			Sun_Update();
+			
+			Log_Element.innerHTML = printlog;
+		}
+		
+		function Update_FP()
+		{
+			Response_String = "FP" + FP_Val.value.padStart(3, '0'); 
+			printlog = "<br/>Sent String:<b>" + Response_String + "</b>";
+			Log_Element.innerHTML = printlog;
+			WS_Tornado.send(Response_String);
+			
+		}
+		
+		function Get_DB_Table()
+		{
+			Response_String = Get_DB_String;
+			printlog = "<br/>Sent String:<b>" + Response_String + "</b>";
+			Log_Element.innerHTML = printlog;
+			WS_Tornado.send(Response_String);
+		}
+		
+		function Erase_DB()
+		{
+			Response_String = Del_DB_String;
+			printlog = "<br/>Sent String:<b>" + Response_String + "</b>";
+			Log_Element.innerHTML = printlog;
+			WS_Tornado.send(Response_String);
+		}
+		
+		function Update_DB()
+		{
+			Response_String = DB_Update_String + DB_Val.value.padStart(3, '0'); 
+			printlog = "<br/>Sent String:<b>" + Response_String + "</b>";
+			Log_Element.innerHTML = printlog;
+			WS_Tornado.send(Response_String);
+		}
+		
+		function Log_Out()
+		{
+			Disable_All();
+		}
+		
+		// String to contain HTML data that will be printed for logging
+		
+		
+		// Just to verify that the script is working
+		Log_Element.innerHTML = "<br/>Logger Start";
+		
+		</script>
+  </body>
+</html>
