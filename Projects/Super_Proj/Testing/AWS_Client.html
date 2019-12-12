@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+	<title>EID Super Project</title>
+	<style>
+		table {
+		  font-family: arial, sans-serif;
+		  border-collapse: collapse;
+		  width: 75%;
+		}
+
+		td, th {
+		  border: 2px solid #dddddd;
+		  text-align: center;
+		  padding: 10px;
+		}
+
+	</style>
+  </head>
+    <body>
+		<h1>Ultra-Low Power Mesh Security System</h1>
+		<br/><br/>
+		<table>
+			<tr>
+				<th></th>
+				<th>Monday</th>
+				<th>Tuesday</th>
+				<th>Wednesday</th>
+				<th>Thursday</th>
+				<th>Friday</th>
+				<th>Saturday</th>
+				<th>Sunday</th>
+			</tr>
+			<tr>
+				<td>Shift Start Time</td>
+				<td id="Mon_ST"></td>
+				<td id="Tue_ST"></td>
+				<td id="Wed_ST"></td>
+				<td id="Thu_ST"></td>
+				<td id="Fri_ST"></td>
+				<td id="Sat_ST"></td>
+				<td id="Sun_ST"></td>
+			</tr>
+			<tr>
+				<td>Shift End Time</td>
+				<td id="Mon_ET"></td>
+				<td id="Tue_ET"></td>
+				<td id="Wed_ET"></td>
+				<td id="Thu_ET"></td>
+				<td id="Fri_ET"></td>
+				<td id="Sat_ET"></td>
+				<td id="Sun_ET"></td>
+			</tr>
+		</table>
+		<p id="Logger_Elem">Logger</p>
+		<p id="Schedule_Elem"></p>
+		<p id="Status_Elem"></p>
+	
+		<script src="https://sdk.amazonaws.com/js/aws-sdk-2.410.0.min.js"></script>
+		<script type="text/javascript">
+		
+/*
+
+Author: Poorn Mehta
+
+HTML File for EID Project 3
+
+Connects to AWS SQS
+
+Implements multiple buttons to provide required functionalities.
+
+SQS - Single - Grabs and deletes one SQS message from the Queue
+SQS - All - Grabs and deletes All (Maximum 20, as per project requirement) SQS messages from the Queue
+SQS - Count - Calculates the number of messages pending in the Queue
+Deg. C (or Deg. F) Button: Simply changes the temperature units between Celsius and Fahrenheit, of all displayed data
+Clear Display - Simple erases everything on screen
+
+Contains HTML as well as jQuery and JavaScript coding
+
+Code was developed with help of following References:
+
+https://www.w3schools.com/jquery/
+https://www.w3schools.com/js/default.asp
+https://os.mbed.com/cookbook/Websockets-Server
+https://www.pubnub.com/blog/nodejs-websocket-programmingexamples/
+https://www.w3schools.com/nodejs/nodejs_mysql.asp
+http://www.tornadoweb.org/en/stable/
+https://www.w3schools.com/js/js_json_parse.asp
+https://stackoverflow.com/questions/21634918/extract-a-float-from-a-string-in-javascript
+https://www.w3schools.com/jsref/jsref_tostring_number.asp
+https://api.jquery.com/jquery.parsejson/
+https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_SendMessage.html
+https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/SQS.html#receiveMessage-property
+https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/sqs-examples-send-receive-messages.html
+https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/sqs-examples-using-queues.html
+https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/SQS.html#deleteMessageBatch-property
+https://stackoverflow.com/questions/951021/what-is-the-javascript-version-of-sleep
+https://stackoverflow.com/questions/1224463/is-there-any-way-to-call-a-function-periodically-in-javascript
+
+*/ 
+			// AWS Queue parameter variables
+			var params = {};
+			var deleteParams = {};
+			
+			// HTML Element variables for easy access
+			var Log_Element = document.getElementById('Logger_Elem');
+			var Schedule_Element = document.getElementById('Schedule_Elem');
+			var Status_Element = document.getElementById('Status_Elem');
+			
+			// DEL
+			var Mon_ST_Val	= document.getElementById('Mon_ST');
+			var Tue_ST_Val	= document.getElementById('Tue_ST');
+			var Wed_ST_Val	= document.getElementById('Wed_ST');
+			var Thu_ST_Val	= document.getElementById('Thu_ST');
+			var Fri_ST_Val	= document.getElementById('Fri_ST');
+			var Sat_ST_Val	= document.getElementById('Sat_ST');
+			var Sun_ST_Val	= document.getElementById('Sun_ST');
+			
+			var Mon_ET_Val	= document.getElementById('Mon_ET');
+			var Tue_ET_Val	= document.getElementById('Tue_ET');
+			var Wed_ET_Val	= document.getElementById('Wed_ET');
+			var Thu_ET_Val	= document.getElementById('Thu_ET');
+			var Fri_ET_Val	= document.getElementById('Fri_ET');
+			var Sat_ET_Val	= document.getElementById('Sat_ET');
+			var Sun_ET_Val	= document.getElementById('Sun_ET');
+			
+			var Type_Schedule = "AWS";
+			var Type_Status_Clear = "CLR";
+			var Type_Status_Alert = "ALT";
+			var Type_Status_Low_Batt = "LOW";
+			
+			// String to contain HTML data to be displayed in status element
+			var status_string = "";
+			
+			// String to hold received data from sqs message
+			var sqs_string = "";
+			
+			// String to contain HTML data that will be printed for logging
+			var printlog = "";
+			
+			// Just to verify that the script is working
+			Log_Element.innerHTML = "<br/>Logger Start";
+			
+			// Initialize the Amazon Cognito credentials provider
+			AWS.config.region = 'us-east-2'; 
+			AWS.config.credentials = new AWS.CognitoIdentityCredentials({IdentityPoolId:  'us-east-2:383a3ce9-e37b-4f43-ae74-220f79c8fc0a'});
+			
+			// Create an SQS service object
+			var sqs = new AWS.SQS({apiVersion: '2012-11-05'});
+			
+			// URL of the SQS Queue
+			var queueURL = "https://sqs.us-east-2.amazonaws.com/310687527958/EID_Proj3";
+			
+			// Some variables required for SQS operations
+			// Message ID for logging
+			var SQS_MessageId;
+			
+			// Store single message that is displayed on screen
+			var SQS_Single_Msg;
+
+			// Message requesting parameters
+			var params = {
+			 AttributeNames: [
+				"SentTimestamp"
+			 ],
+			 MaxNumberOfMessages: 1,
+			 MessageAttributeNames: [
+				"All"
+			 ],
+			 QueueUrl: queueURL,
+			 VisibilityTimeout: 0,
+			 WaitTimeSeconds: 0
+			};
+			
+			function Periodic_AWS_SQS_Pull()
+			{
+				printlog = "<br/>Starting to Query SQS";
+				Log_Element.innerHTML = printlog;
+				
+				// Calling receive message function from AWS SDK
+				sqs.receiveMessage(params, function(err, data)
+				{
+					// Check for errors
+					if(err) 
+					{
+						printlog = "<br/><b>READ ERROR: " + JSON.stringify(err) + "</b>";
+						Log_Element.innerHTML = printlog;
+					}
+					
+					else if(data.Messages)
+					{
+						// Check if the received message is null
+						if(JSON.stringify(data.Messages) == "[]")
+						{
+							printlog = "<br/>Single Read Empty";
+							Log_Element.innerHTML = printlog;
+						}
+						else
+						{
+							printlog = "<br/><b>Single SQS Success</b>";
+							
+							// Logging
+							SQS_Single_Msg = data.Messages[0];
+							SQS_MessageId = data.Messages[0].MessageId;
+							printlog += "<br/><b>Pulled: " + SQS_MessageId + "</b>";
+							Log_Element.innerHTML = printlog;
+
+							if(data.Messages[0].MessageAttributes.Type.StringValue == Type_Schedule)
+							{
+								sqs_string = data.Messages[0].MessageAttributes.MON.StringValue;
+								Mon_ST_Val.innerHTML = sqs_string.substring(0, 5);
+								Mon_ET_Val.innerHTML = sqs_string.substring(5, 10);
+								
+								sqs_string = data.Messages[0].MessageAttributes.TUE.StringValue;
+								Tue_ST_Val.innerHTML = sqs_string.substring(0, 5);
+								Tue_ET_Val.innerHTML = sqs_string.substring(5, 10);
+								
+								sqs_string = data.Messages[0].MessageAttributes.WED.StringValue;
+								Wed_ST_Val.innerHTML = sqs_string.substring(0, 5);
+								Wed_ET_Val.innerHTML = sqs_string.substring(5, 10);
+								
+								sqs_string = data.Messages[0].MessageAttributes.THU.StringValue;
+								Thu_ST_Val.innerHTML = sqs_string.substring(0, 5);
+								Thu_ET_Val.innerHTML = sqs_string.substring(5, 10);
+								
+								sqs_string = data.Messages[0].MessageAttributes.FRI.StringValue;
+								Fri_ST_Val.innerHTML = sqs_string.substring(0, 5);
+								Fri_ET_Val.innerHTML = sqs_string.substring(5, 10);
+								
+								sqs_string = data.Messages[0].MessageAttributes.SAT.StringValue;
+								Sat_ST_Val.innerHTML = sqs_string.substring(0, 5);
+								Sat_ET_Val.innerHTML = sqs_string.substring(5, 10);
+								
+								sqs_string = data.Messages[0].MessageAttributes.SAT.StringValue;
+								Sun_ST_Val.innerHTML = sqs_string.substring(0, 5);
+								Sun_ET_Val.innerHTML = sqs_string.substring(5, 10);
+							}
+
+							else if(data.Messages[0].MessageAttributes.Type.StringValue == Type_Status_Clear)
+							{
+								status_string = "<br/><b>Everything is Good!</b><br/><b>Reported from Node: ";
+								status_string += data.Messages[0].MessageAttributes.Node.StringValue;
+								Status_Element.innerHTML = status_string;
+							}
+							
+							else if(data.Messages[0].MessageAttributes.Type.StringValue == Type_Status_Alert)
+							{
+								status_string = "<br/><b>!!!SECURITY BREACH DETECTED!!!</b><br/><b>Reported from Node: ";
+								status_string += data.Messages[0].MessageAttributes.Node.StringValue;
+								Status_Element.innerHTML = status_string;
+							}
+							
+							else if(data.Messages[0].MessageAttributes.Type.StringValue == Type_Status_Low_Batt)
+							{
+								status_string = "<br/><b>Attention: Low Battery Detected!</b><br/><b>Reported from Node: ";
+								status_string += data.Messages[0].MessageAttributes.Node.StringValue;
+								Status_Element.innerHTML = status_string;
+							}
+						
+							// Delete the processed message
+							deleteParams = {QueueUrl: queueURL, ReceiptHandle: data.Messages[0].ReceiptHandle};
+							sqs.deleteMessage(deleteParams, function(err, data)
+							{
+								// Check for errors while attempting to delete
+								if(err)
+								{
+									printlog = "<br/><b>DEL ERROR: " + JSON.stringify(err) + "</b>";
+									Log_Element.innerHTML = printlog;
+								}
+								else
+								{
+									// Logging
+									printlog += "<br/><b>Deleted: " + SQS_MessageId + "</b>";
+									Log_Element.innerHTML = printlog;
+								}
+							}); 
+						}
+					}
+					
+					// Handling error conditions
+					else
+					{
+						printlog = "<br/><b>Single Read Empty</b>";
+						Log_Element.innerHTML = printlog;
+					}
+				});
+				
+				printlog = "<br/>Update Completed";
+				Log_Element.innerHTML = printlog;
+			}
+			
+			var interval = setInterval(Periodic_AWS_SQS_Pull, 1000);
+		
+		</script>
+  </body>
+</html>
